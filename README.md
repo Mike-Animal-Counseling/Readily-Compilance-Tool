@@ -46,6 +46,7 @@ The app is deployed on Vercel for private testing. The live deployment URL is in
 Create a `.env.local` file:
 
 ```bash
+DEMO_ACCESS_CODE=READILY2026
 OPENROUTER_API_KEY=your_openrouter_api_key
 OPENROUTER_MODEL=openai/gpt-4.1-mini
 OPENROUTER_EXTRACT_MODEL=openai/gpt-4.1-mini
@@ -66,6 +67,7 @@ DATABASE_URL=your_postgres_connection_string
 The repo includes `.env.example` with the same keys.
 
 - `OPENROUTER_MODEL` is the fallback default model.
+- `DEMO_ACCESS_CODE` enables a lightweight hosted-demo access gate when set.
 - `OPENROUTER_EXTRACT_MODEL` optionally overrides the audit-question extraction model.
 - `OPENROUTER_REVIEW_MODEL` optionally overrides the review/evaluation model.
 - `OPENROUTER_EMBEDDING_MODEL` is used for preloaded-policy embeddings in Postgres.
