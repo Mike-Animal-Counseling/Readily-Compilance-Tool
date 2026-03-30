@@ -6,6 +6,14 @@ The system is framed as a secure compliance assistant built around data minimiza
 
 The app now supports a persistent pre-ingested default policy library plus optional uploaded policies. This makes the workflow closer to a real organization policy knowledge base while preserving the existing upload flow.
 
+## Quick Summary
+
+- Upload one audit PDF and extract review questions
+- Review and edit the extracted question set
+- Use a persistent default policy library plus optional uploaded policies
+- Run grounded `Yes` / `No` evaluation against retrieved evidence
+- Export a review-ready CSV with citations and analyst review state
+
 ## Stack
 
 - Next.js 16.2.1 with App Router
@@ -127,9 +135,12 @@ npm run build
 
 - `POST /api/extract-audit`
   - Accepts one audit PDF
-  - Extracts PDF text
-  - Streams extraction progress events while batching pages through the LLM
+  - Creates an extract job and returns a `jobId`
+  - Processes batched audit extraction in the background
   - Falls back to local heuristic extraction when needed
+
+- `GET /api/extract-audit?jobId=...`
+  - Returns extract job status, batch progress, and the final payload when complete
 
 - `POST /api/parse-policies`
   - Accepts one or more policy PDFs
