@@ -10,6 +10,7 @@
     "ingest:policies": "tsx scripts/ingest-preloaded-policies.ts"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^0.1.97",
     "dotenv": "^17.3.1",
     "next": "16.2.1",
     "pdfjs-dist": "^5.4.624",

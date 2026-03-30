@@ -1,4 +1,3 @@
-import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PdfPage } from "@/types/compliance";
 
 type TextItem = {
@@ -6,6 +5,38 @@ type TextItem = {
   hasEOL?: boolean;
   transform: number[];
 };
+
+type PdfJsModule = typeof import("pdfjs-dist/legacy/build/pdf.mjs");
+
+let pdfJsModulePromise: Promise<PdfJsModule> | null = null;
+
+async function loadPdfJsModule() {
+  if (!pdfJsModulePromise) {
+    pdfJsModulePromise = (async () => {
+      const runtimeGlobal = globalThis as typeof globalThis & {
+        DOMMatrix?: unknown;
+        ImageData?: unknown;
+        Path2D?: unknown;
+      };
+
+      if (
+        runtimeGlobal.DOMMatrix === undefined ||
+        runtimeGlobal.ImageData === undefined ||
+        runtimeGlobal.Path2D === undefined
+      ) {
+        const canvasModule = await import("@napi-rs/canvas");
+
+        runtimeGlobal.DOMMatrix ??= canvasModule.DOMMatrix;
+        runtimeGlobal.ImageData ??= canvasModule.ImageData;
+        runtimeGlobal.Path2D ??= canvasModule.Path2D;
+      }
+
+      return import("pdfjs-dist/legacy/build/pdf.mjs");
+    })();
+  }
+
+  return pdfJsModulePromise;
+}
 
 function normalizePageText(items: TextItem[]) {
   const lines: string[] = [];
@@ -46,6 +77,8 @@ function normalizePageText(items: TextItem[]) {
 }
 
 async function extractPdfPagesFromData(data: Uint8Array): Promise<PdfPage[]> {
+  const { getDocument } = await loadPdfJsModule();
+
   const pdf = await getDocument({
     data,
     disableFontFace: true,
