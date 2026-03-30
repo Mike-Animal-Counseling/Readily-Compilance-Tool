@@ -6,6 +6,10 @@ The system is framed as a secure compliance assistant built around data minimiza
 
 The app now supports a persistent pre-ingested default policy library plus optional uploaded policies. This makes the workflow closer to a real organization policy knowledge base while preserving the existing upload flow.
 
+## Deployment
+
+The app is deployed on Vercel for private testing. The live deployment URL is intentionally not published because the current environment uses private LLM API credentials and billable model access.
+
 ## Quick Summary
 
 - Upload one audit PDF and extract review questions
