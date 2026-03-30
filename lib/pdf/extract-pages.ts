@@ -13,11 +13,7 @@ let pdfJsModulePromise: Promise<PdfJsModule> | null = null;
 async function loadPdfJsModule() {
   if (!pdfJsModulePromise) {
     pdfJsModulePromise = (async () => {
-      const runtimeGlobal = globalThis as typeof globalThis & {
-        DOMMatrix?: unknown;
-        ImageData?: unknown;
-        Path2D?: unknown;
-      };
+      const runtimeGlobal = globalThis as Record<string, unknown>;
 
       if (
         runtimeGlobal.DOMMatrix === undefined ||
