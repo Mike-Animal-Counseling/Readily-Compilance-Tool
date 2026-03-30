@@ -28,9 +28,9 @@ async function loadPdfJsModule() {
         const require = createRequire(import.meta.url);
         const canvasModule = require("@napi-rs/canvas") as typeof import("@napi-rs/canvas");
 
-        runtimeGlobal.DOMMatrix ??= canvasModule.DOMMatrix;
-        runtimeGlobal.ImageData ??= canvasModule.ImageData;
-        runtimeGlobal.Path2D ??= canvasModule.Path2D;
+        runtimeGlobal.DOMMatrix ??= canvasModule.DOMMatrix as unknown;
+        runtimeGlobal.ImageData ??= canvasModule.ImageData as unknown;
+        runtimeGlobal.Path2D ??= canvasModule.Path2D as unknown;
       }
 
       return import("pdfjs-dist/legacy/build/pdf.mjs");
