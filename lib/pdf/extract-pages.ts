@@ -24,7 +24,9 @@ async function loadPdfJsModule() {
         runtimeGlobal.ImageData === undefined ||
         runtimeGlobal.Path2D === undefined
       ) {
-        const canvasModule = await import("@napi-rs/canvas");
+        const { createRequire } = await import("node:module");
+        const require = createRequire(import.meta.url);
+        const canvasModule = require("@napi-rs/canvas") as typeof import("@napi-rs/canvas");
 
         runtimeGlobal.DOMMatrix ??= canvasModule.DOMMatrix;
         runtimeGlobal.ImageData ??= canvasModule.ImageData;
