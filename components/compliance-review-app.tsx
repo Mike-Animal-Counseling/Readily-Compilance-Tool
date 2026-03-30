@@ -254,6 +254,7 @@ export function ComplianceReviewApp() {
     input: RequestInfo | URL,
     init: RequestInit,
     timeoutMs = REVIEW_REQUEST_TIMEOUT_MS,
+    timeoutMessage = "Question evaluation timed out.",
   ): Promise<T> {
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -267,7 +268,7 @@ export function ComplianceReviewApp() {
       return await readJsonResponse<T>(response);
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
-        throw new Error("Question evaluation timed out.");
+        throw new Error(timeoutMessage);
       }
 
       throw error;
@@ -303,7 +304,8 @@ export function ComplianceReviewApp() {
           method: "POST",
           body: formData,
         },
-        15000,
+        60000,
+        "Audit extraction setup timed out.",
       );
 
       let completedPayload: ExtractAuditResponse | null = null;
@@ -315,6 +317,7 @@ export function ComplianceReviewApp() {
             method: "GET",
           },
           15000,
+          "Audit extraction status check timed out.",
         );
 
         setExtractProgress({

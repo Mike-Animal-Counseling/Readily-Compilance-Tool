@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { buildAuditExtractionListPrompt } from "@/lib/llm/prompts";
 import {
   completeExtractAuditJob,
@@ -184,7 +185,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const job = getExtractAuditJob(jobId);
+  const job = await getExtractAuditJob(jobId);
 
   if (!job) {
     return Response.json(
@@ -206,17 +207,17 @@ export async function GET(request: Request) {
 }
 
 async function runExtractAuditJob(jobId: string, auditFile: File) {
-  startExtractAuditJob(jobId);
+  await startExtractAuditJob(jobId);
 
   try {
-    updateExtractAuditJob(jobId, {
+    await updateExtractAuditJob(jobId, {
       stage: "starting",
       message: "Preparing audit extraction job.",
       completedBatches: 0,
       totalBatches: 0,
     });
 
-    updateExtractAuditJob(jobId, {
+    await updateExtractAuditJob(jobId, {
       stage: "reading_pdf",
       message: "Reading and parsing the audit PDF.",
       completedBatches: 0,
@@ -230,7 +231,7 @@ async function runExtractAuditJob(jobId: string, auditFile: File) {
       .trim();
 
     if (combinedText.length < 40) {
-      failExtractAuditJob(
+      await failExtractAuditJob(
         jobId,
         "The audit PDF did not contain enough extractable text. This MVP does not support OCR-only scans.",
       );
@@ -239,7 +240,7 @@ async function runExtractAuditJob(jobId: string, auditFile: File) {
 
     const pageBatches = chunkPages(pages, AUDIT_EXTRACTION_BATCH_SIZE);
 
-    updateExtractAuditJob(jobId, {
+    await updateExtractAuditJob(jobId, {
       stage: "preparing_batches",
       message: `Prepared ${pageBatches.length} extraction batches.`,
       completedBatches: 0,
@@ -249,7 +250,7 @@ async function runExtractAuditJob(jobId: string, auditFile: File) {
     const batchResults = [];
 
     for (const [index, pageBatch] of pageBatches.entries()) {
-      updateExtractAuditJob(jobId, {
+      await updateExtractAuditJob(jobId, {
         stage: "extracting_batch",
         message: `Extracting questions from batch ${index + 1} of ${pageBatches.length}.`,
         completedBatches: index,
@@ -258,7 +259,7 @@ async function runExtractAuditJob(jobId: string, auditFile: File) {
 
       batchResults.push(await extractQuestionsFromBatch(pageBatch, auditFile.name));
 
-      updateExtractAuditJob(jobId, {
+      await updateExtractAuditJob(jobId, {
         stage: "extracting_batch",
         message: `Completed batch ${index + 1} of ${pageBatches.length}.`,
         completedBatches: index + 1,
@@ -266,7 +267,7 @@ async function runExtractAuditJob(jobId: string, auditFile: File) {
       });
     }
 
-    updateExtractAuditJob(jobId, {
+    await updateExtractAuditJob(jobId, {
       stage: "deduping",
       message: "Deduplicating extracted questions.",
       completedBatches: pageBatches.length,
@@ -282,7 +283,7 @@ async function runExtractAuditJob(jobId: string, auditFile: File) {
     })) satisfies AuditQuestion[];
 
     if (questions.length === 0) {
-      failExtractAuditJob(
+      await failExtractAuditJob(
         jobId,
         "Could not extract audit questions from this PDF. Try a clearer text-based audit questionnaire or switch to a more reliable LLM model.",
       );
@@ -300,14 +301,14 @@ async function runExtractAuditJob(jobId: string, auditFile: File) {
           ? "llm"
           : "heuristic";
 
-    completeExtractAuditJob(jobId, {
+    await completeExtractAuditJob(jobId, {
       auditFileName: auditFile.name,
       pageCount: pages.length,
       questions,
       extractionMethod,
     });
   } catch (error) {
-    failExtractAuditJob(
+    await failExtractAuditJob(
       jobId,
       error instanceof Error ? error.message : "Failed to extract audit questions.",
     );
@@ -330,9 +331,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const { jobId } = createExtractAuditJob();
+  const { jobId } = await createExtractAuditJob();
 
-  void runExtractAuditJob(jobId, auditFile);
+  after(async () => {
+    await runExtractAuditJob(jobId, auditFile);
+  });
 
   return Response.json(
     { jobId },
