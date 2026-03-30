@@ -14,14 +14,15 @@ async function loadPdfJsModule() {
   if (!pdfJsModulePromise) {
     pdfJsModulePromise = (async () => {
       const runtimeGlobal = globalThis as Record<string, unknown>;
+      const { createRequire } = await import("node:module");
+      const { pathToFileURL } = await import("node:url");
+      const require = createRequire(import.meta.url);
 
       if (
         runtimeGlobal.DOMMatrix === undefined ||
         runtimeGlobal.ImageData === undefined ||
         runtimeGlobal.Path2D === undefined
       ) {
-        const { createRequire } = await import("node:module");
-        const require = createRequire(import.meta.url);
         const canvasModule = require("@napi-rs/canvas") as typeof import("@napi-rs/canvas");
 
         runtimeGlobal.DOMMatrix ??= canvasModule.DOMMatrix as unknown;
@@ -29,7 +30,11 @@ async function loadPdfJsModule() {
         runtimeGlobal.Path2D ??= canvasModule.Path2D as unknown;
       }
 
-      return import("pdfjs-dist/legacy/build/pdf.mjs");
+      const pdfJsModule = await import("pdfjs-dist/legacy/build/pdf.mjs");
+      const workerPath = require.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs");
+      pdfJsModule.GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).href;
+
+      return pdfJsModule;
     })();
   }
 
