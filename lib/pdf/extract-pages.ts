@@ -1,75 +1,62 @@
+import PDFParser, {
+  type Output as ParsedPdfOutput,
+  type Page as ParsedPdfPage,
+  type Text as ParsedPdfText,
+} from "pdf2json";
 import type { PdfPage } from "@/types/compliance";
 
-type TextItem = {
-  str: string;
-  hasEOL?: boolean;
-  transform: number[];
+type NormalizedTextItem = {
+  text: string;
+  x: number;
+  y: number;
 };
 
-type PdfJsModule = typeof import("pdfjs-dist/legacy/build/pdf.mjs");
+const LINE_Y_THRESHOLD = 0.35;
 
-let pdfJsModulePromise: Promise<PdfJsModule> | null = null;
-
-async function loadPdfJsModule() {
-  if (!pdfJsModulePromise) {
-    pdfJsModulePromise = (async () => {
-      const runtimeGlobal = globalThis as Record<string, unknown>;
-      const { createRequire } = await import("node:module");
-      const { pathToFileURL } = await import("node:url");
-      const require = createRequire(import.meta.url);
-
-      if (
-        runtimeGlobal.DOMMatrix === undefined ||
-        runtimeGlobal.ImageData === undefined ||
-        runtimeGlobal.Path2D === undefined
-      ) {
-        const canvasModule = require("@napi-rs/canvas") as typeof import("@napi-rs/canvas");
-
-        runtimeGlobal.DOMMatrix ??= canvasModule.DOMMatrix as unknown;
-        runtimeGlobal.ImageData ??= canvasModule.ImageData as unknown;
-        runtimeGlobal.Path2D ??= canvasModule.Path2D as unknown;
-      }
-
-      const pdfJsModule = await import("pdfjs-dist/legacy/build/pdf.mjs");
-      const workerPath = require.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs");
-      pdfJsModule.GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).href;
-
-      return pdfJsModule;
-    })();
+function decodePdfText(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
   }
-
-  return pdfJsModulePromise;
 }
 
-function normalizePageText(items: TextItem[]) {
+function normalizePageText(items: NormalizedTextItem[]) {
+  if (items.length === 0) {
+    return "";
+  }
+
+  const sortedItems = [...items].sort((left, right) => {
+    if (Math.abs(left.y - right.y) > LINE_Y_THRESHOLD) {
+      return left.y - right.y;
+    }
+
+    return left.x - right.x;
+  });
+
   const lines: string[] = [];
   let currentLine = "";
   let previousY: number | null = null;
 
-  for (const item of items) {
-    const currentY = Math.round(item.transform[5] ?? 0);
+  for (const item of sortedItems) {
+    const nextToken = item.text.replace(/\s+/g, " ").trim();
+
+    if (!nextToken) {
+      continue;
+    }
+
     const startsNewLine =
-      previousY !== null && Math.abs(currentY - previousY) > 2 && currentLine.trim();
+      previousY !== null &&
+      Math.abs(item.y - previousY) > LINE_Y_THRESHOLD &&
+      currentLine.trim().length > 0;
 
     if (startsNewLine) {
       lines.push(currentLine.trim());
       currentLine = "";
     }
 
-    const nextToken = item.str.trim();
-    if (!nextToken) {
-      previousY = currentY;
-      continue;
-    }
-
     currentLine += currentLine ? ` ${nextToken}` : nextToken;
-
-    if (item.hasEOL) {
-      lines.push(currentLine.trim());
-      currentLine = "";
-    }
-
-    previousY = currentY;
+    previousY = item.y;
   }
 
   if (currentLine.trim()) {
@@ -79,41 +66,49 @@ function normalizePageText(items: TextItem[]) {
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-async function extractPdfPagesFromData(data: Uint8Array): Promise<PdfPage[]> {
-  const { getDocument } = await loadPdfJsModule();
+function convertParsedPage(page: ParsedPdfPage, pageNumber: number): PdfPage {
+  const items: NormalizedTextItem[] = page.Texts.flatMap((textBlock: ParsedPdfText) =>
+    textBlock.R.map((run) => ({
+      text: decodePdfText(run.T),
+      x: textBlock.x,
+      y: textBlock.y,
+    })),
+  );
 
-  const pdf = await getDocument({
-    data,
-    disableFontFace: true,
-    useSystemFonts: true,
-    isEvalSupported: false,
-  }).promise;
+  return {
+    pageNumber,
+    text: normalizePageText(items),
+  };
+}
 
-  const pages: PdfPage[] = [];
+async function parsePdfBuffer(data: Uint8Array): Promise<ParsedPdfOutput> {
+  return new Promise((resolve, reject) => {
+    const parser = new PDFParser(null, false);
 
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-    const page = await pdf.getPage(pageNumber);
-    const textContent = await page.getTextContent();
-    const pageItems: TextItem[] = textContent.items.flatMap((item) =>
-      "str" in item && Array.isArray(item.transform)
-        ? [
-            {
-              str: item.str,
-              hasEOL: item.hasEOL,
-              transform: item.transform,
-            },
-          ]
-        : [],
-    );
-    const pageText = normalizePageText(pageItems);
-
-    pages.push({
-      pageNumber,
-      text: pageText,
+    parser.on("pdfParser_dataReady", (pdfData) => {
+      parser.destroy();
+      resolve(pdfData);
     });
-  }
 
-  return pages;
+    parser.on("pdfParser_dataError", (error) => {
+      parser.destroy();
+      reject(
+        error instanceof Error
+          ? error
+          : error?.parserError instanceof Error
+            ? error.parserError
+            : new Error("Failed to parse PDF."),
+      );
+    });
+
+    parser.parseBuffer(Buffer.from(data));
+  });
+}
+
+async function extractPdfPagesFromData(data: Uint8Array): Promise<PdfPage[]> {
+  const parsedPdf = await parsePdfBuffer(data);
+
+  return parsedPdf.Pages.map((page, index) => convertParsedPage(page, index + 1));
 }
 
 export async function extractPdfPages(file: File): Promise<PdfPage[]> {
@@ -128,5 +123,6 @@ export async function extractPdfPagesFromBuffer(
     buffer instanceof Uint8Array
       ? new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
       : new Uint8Array(buffer);
+
   return extractPdfPagesFromData(data);
 }

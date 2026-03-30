@@ -20,7 +20,7 @@ The app now supports a persistent pre-ingested default policy library plus optio
 - TypeScript
 - Tailwind CSS 4
 - OpenRouter for LLM calls
-- `pdfjs-dist` for page-preserving PDF text extraction
+- `pdf2json` for server-side page-preserving PDF text extraction
 - `zod` for request and model-output validation
 
 ## What It Does
