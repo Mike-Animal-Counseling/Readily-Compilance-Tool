@@ -20,7 +20,7 @@ The app is deployed on Vercel for private testing. The live deployment URL is in
 
 ## Stack
 
-- Next.js 16.2.1 with App Router
+- Next.js 16.4.0 with App Router
 - TypeScript
 - Tailwind CSS 4
 - OpenRouter for LLM calls
