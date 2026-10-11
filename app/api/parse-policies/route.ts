@@ -1,3 +1,5 @@
+import { guardApi } from "@/lib/security/api";
+import { requestSession } from "@/lib/auth/session";
 import { NextResponse } from "next/server";
 import { createDataset } from "@/lib/data/dataset-store";
 import { extractPdfPages } from "@/lib/pdf/extract-pages";
@@ -11,14 +13,14 @@ import type {
 
 export const runtime = "nodejs";
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   try {
     const formData = await request.formData();
     const uploadedFiles = formData
       .getAll("policies")
       .filter((value): value is File => value instanceof File);
 
-    if (uploadedFiles.length === 0) {
+    if (uploadedFiles.length === 0 || uploadedFiles.length > 3) {
       return NextResponse.json(
         { error: "Upload at least one policy PDF." },
         { status: 400 },
@@ -63,10 +65,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const datasetId = createDataset({
+    const datasetId = await createDataset({
       documents,
       chunks,
-    });
+    }, (await requestSession(request))!.sid);
 
     const response: ParsePoliciesResponse = {
       datasetId,
@@ -80,10 +82,12 @@ export async function POST(request: Request) {
     };
 
     return NextResponse.json(response);
-  } catch (error) {
+  } catch {
     const message =
-      error instanceof Error ? error.message : "Failed to parse policy PDFs.";
+      "Request could not be completed.";
 
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export const POST = guardApi(handlePOST, true);

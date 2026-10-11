@@ -1,7 +1,8 @@
-import PDFParser, {
-  type Output as ParsedPdfOutput,
-  type Page as ParsedPdfPage,
-  type Text as ParsedPdfText,
+import { Worker } from "node:worker_threads";
+import type {
+  Output as ParsedPdfOutput,
+  Page as ParsedPdfPage,
+  Text as ParsedPdfText,
 } from "pdf2json";
 import type { PdfPage } from "@/types/compliance";
 
@@ -81,37 +82,30 @@ function convertParsedPage(page: ParsedPdfPage, pageNumber: number): PdfPage {
   };
 }
 
+let activeWorkers = 0;
 async function parsePdfBuffer(data: Uint8Array): Promise<ParsedPdfOutput> {
-  return new Promise((resolve, reject) => {
-    const parser = new PDFParser(null, false);
-
-    parser.on("pdfParser_dataReady", (pdfData) => {
-      parser.destroy();
-      resolve(pdfData);
-    });
-
-    parser.on("pdfParser_dataError", (error) => {
-      parser.destroy();
-      reject(
-        error instanceof Error
-          ? error
-          : error?.parserError instanceof Error
-            ? error.parserError
-            : new Error("Failed to parse PDF."),
-      );
-    });
-
-    parser.parseBuffer(Buffer.from(data));
-  });
+  if (data.length > 2 * 1024 * 1024 || Buffer.from(data.subarray(0, 5)).toString() !== '%PDF-') throw new Error('PDF must be valid and at most 2 MiB');
+  if (activeWorkers >= 2) throw new Error("PDF processor busy");
+  activeWorkers++;
+  try { return await new Promise<ParsedPdfOutput>((resolve, reject) => {
+    const worker = new Worker(new URL('./pdf-worker.mjs', import.meta.url), { workerData: data, resourceLimits: { maxOldGenerationSizeMb: 128 } });
+    const timer = setTimeout(() => { void worker.terminate(); reject(new Error('PDF parsing timed out')); }, 10000);
+    const finish = () => { clearTimeout(timer); void worker.terminate(); };
+    worker.once('message', (result) => { finish(); if (result.error) reject(new Error('Invalid PDF')); else resolve(result.data); });
+    worker.once('error', () => { finish(); reject(new Error('Invalid PDF')); });
+    worker.once('exit', code => { clearTimeout(timer); if (code !== 0) reject(new Error('PDF parsing stopped')); });
+  }); } finally { activeWorkers--; }
 }
-
 async function extractPdfPagesFromData(data: Uint8Array): Promise<PdfPage[]> {
   const parsedPdf = await parsePdfBuffer(data);
 
-  return parsedPdf.Pages.map((page, index) => convertParsedPage(page, index + 1));
+  const pages = parsedPdf.Pages.map((page, index) => convertParsedPage(page, index + 1));
+  if (pages.length > 30 || pages.reduce((n, page) => n + page.text.length, 0) > 500000) throw new Error("PDF content exceeds limits");
+  return pages;
 }
 
 export async function extractPdfPages(file: File): Promise<PdfPage[]> {
+  if (file.size > 2 * 1024 * 1024) throw new Error("PDF exceeds 2 MiB");
   const buffer = await file.arrayBuffer();
   return extractPdfPagesFromData(new Uint8Array(buffer));
 }

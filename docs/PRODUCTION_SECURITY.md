@@ -1,0 +1,9 @@
+# Production security requirements
+
+Use Node 24 or later and deploy only behind HTTPS. Set `APP_ORIGIN` to the exact public HTTPS origin. Generate two DIFFERENT random secrets of at least 32 bytes for `DEMO_ACCESS_CODE` and `SESSION_SECRET`; neither may be an example value. Configure authenticated TLS `REDIS_URL`. The server refuses production startup without these controls. Restrict Redis network access and set a memory ceiling with `noeviction`; storage failures reject work instead of bypassing limits. Configure authenticated PostgreSQL TLS for the optional policy library and a least-privileged database user.
+
+Access is invite-code based, not enterprise identity management. Signed HttpOnly Secure SameSite=Strict sessions expire after two hours, and uploaded datasets/jobs are isolated by session. Rotating `SESSION_SECRET` invalidates all sessions. Shared access should only be used for a controlled demo with synthetic documents. For organization production use, integrate named accounts/SSO, authorization and an audit trail before accepting sensitive compliance documents.
+
+PDF uploads are limited to 2 MiB per file, three policies per request, 30 pages per file, bounded text, and two isolated parsers per instance. Parsing workers have a 128 MiB heap budget and a 10-second deadline. Datasets expire after one hour and jobs after 30 minutes in shared storage. API/provider budgets and 20-second provider deadlines are enforced across workers. Provider content is sent to OpenRouter: configure privacy, retention and provider-side spending caps for your deployment.
+
+The server sets CSP nonces and blocks framing. API responses are not cached. POST endpoints validate Origin. CSV exports neutralize formula prefixes. Run `npm ci --ignore-scripts`, `npm test`, `npm run lint`, `npm run build`, and `npm audit`. The old raw access-code cookie and known sample code are no longer accepted.

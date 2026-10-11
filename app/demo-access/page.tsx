@@ -3,7 +3,7 @@ import { DemoAccessForm } from "@/app/demo-access/demo-access-form";
 
 function getSafeRedirectTarget(value: string | string[] | undefined) {
   const candidate = Array.isArray(value) ? value[0] : value;
-  return candidate && candidate.startsWith("/") ? candidate : "/";
+  return candidate && candidate.startsWith("/") && !candidate.startsWith("//") && !/[\\\u0000-\u0020]/.test(candidate) ? candidate : "/";
 }
 
 export default async function DemoAccessPage({

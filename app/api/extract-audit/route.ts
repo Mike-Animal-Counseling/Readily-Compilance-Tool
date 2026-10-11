@@ -1,3 +1,5 @@
+import { guardApi } from "@/lib/security/api";
+import { requestSession } from "@/lib/auth/session";
 import { after } from "next/server";
 import { buildAuditExtractionListPrompt } from "@/lib/llm/prompts";
 import {
@@ -155,11 +157,11 @@ async function extractQuestionsFromBatch(
       questions: llmQuestions,
       extractionMethod: "llm",
     };
-  } catch (error) {
+  } catch {
     console.warn("[extract-audit] using heuristic fallback for batch", {
       pageStart: pages[0]?.pageNumber ?? 1,
       pageEnd: pages.at(-1)?.pageNumber ?? pages.length,
-      message: error instanceof Error ? error.message : "Unknown extraction error",
+      message: "Request could not be completed.",
     });
 
     return {
@@ -169,7 +171,7 @@ async function extractQuestionsFromBatch(
   }
 }
 
-export async function GET(request: Request) {
+async function handleGET(request: Request) {
   const { searchParams } = new URL(request.url);
   const jobId = searchParams.get("jobId");
 
@@ -185,7 +187,8 @@ export async function GET(request: Request) {
     );
   }
 
-  const job = await getExtractAuditJob(jobId);
+  const owner = (await requestSession(request))!.sid;
+  const job = jobId.startsWith(owner + ".") ? await getExtractAuditJob(jobId) : null;
 
   if (!job) {
     return Response.json(
@@ -307,19 +310,16 @@ async function runExtractAuditJob(jobId: string, auditFile: File) {
       questions,
       extractionMethod,
     });
-  } catch (error) {
-    await failExtractAuditJob(
-      jobId,
-      error instanceof Error ? error.message : "Failed to extract audit questions.",
-    );
+  } catch {
+    await failExtractAuditJob(jobId);
   }
 }
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   const formData = await request.formData();
   const auditFile = formData.get("audit");
 
-  if (!(auditFile instanceof File)) {
+  if (!(auditFile instanceof File) || auditFile.size > 2 * 1024 * 1024) {
     return Response.json(
       { error: "Upload one audit PDF to extract questions." },
       {
@@ -331,7 +331,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { jobId } = await createExtractAuditJob();
+  const { jobId } = await createExtractAuditJob((await requestSession(request))!.sid);
 
   after(async () => {
     await runExtractAuditJob(jobId, auditFile);
@@ -346,3 +346,7 @@ export async function POST(request: Request) {
     },
   );
 }
+
+export const GET = guardApi(handleGET, false);
+
+export const POST = guardApi(handlePOST, true);

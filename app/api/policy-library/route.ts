@@ -1,3 +1,4 @@
+import { guardApi } from "@/lib/security/api";
 import { NextResponse } from "next/server";
 import {
   getPreloadedPolicyLibraryMetadata,
@@ -7,7 +8,7 @@ import type { PolicyLibraryResponse } from "@/types/compliance";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+async function handleGET() {
   try {
     const [documents, status] = await Promise.all([
       getPreloadedPolicyLibraryMetadata(),
@@ -23,10 +24,12 @@ export async function GET() {
     };
 
     return NextResponse.json(response);
-  } catch (error) {
+  } catch {
     const message =
-      error instanceof Error ? error.message : "Failed to load default policy library.";
+      "Request could not be completed.";
 
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export const GET = guardApi(handleGET, false);
