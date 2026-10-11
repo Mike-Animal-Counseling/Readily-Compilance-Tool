@@ -202,3 +202,7 @@ npm run build
 
 - `scripts/ingest-preloaded-policies.ts`
   - Offline ingestion command for loading `policies/` into Postgres
+
+## Security and deployment
+
+Read the [security policy](SECURITY.md) and [production requirements](docs/PRODUCTION_SECURITY.md) before deployment.

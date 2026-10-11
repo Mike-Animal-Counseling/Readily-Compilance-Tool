@@ -1,3 +1,5 @@
+import { guardApi } from "@/lib/security/api";
+import { requestSession } from "@/lib/auth/session";
 import { NextResponse } from "next/server";
 import { getDataset } from "@/lib/data/dataset-store";
 import { searchPreloadedPolicyChunks } from "@/lib/db/preloaded-policy-store";
@@ -7,7 +9,7 @@ import type { EvaluateOneResponse } from "@/types/compliance";
 
 export const runtime = "nodejs";
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   try {
     const body = await request.json();
     const parsedBody = evaluateOneRequestSchema.parse(body);
@@ -15,7 +17,7 @@ export async function POST(request: Request) {
     const uploadedChunks = [];
 
     if (parsedBody.uploadedDatasetId) {
-      const dataset = getDataset(parsedBody.uploadedDatasetId);
+      const dataset = await getDataset(parsedBody.uploadedDatasetId, (await requestSession(request))!.sid);
       if (!dataset) {
         return NextResponse.json(
           {
@@ -77,10 +79,12 @@ export async function POST(request: Request) {
 
     const response: EvaluateOneResponse = { result };
     return NextResponse.json(response);
-  } catch (error) {
+  } catch {
     const message =
-      error instanceof Error ? error.message : "Failed to re-run question review.";
+      "Request could not be completed.";
 
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export const POST = guardApi(handlePOST, true);

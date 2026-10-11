@@ -1,3 +1,5 @@
+import { guardApi } from "@/lib/security/api";
+import { requestSession } from "@/lib/auth/session";
 import { NextResponse } from "next/server";
 import { getDataset } from "@/lib/data/dataset-store";
 import { searchPreloadedPolicyChunks } from "@/lib/db/preloaded-policy-store";
@@ -64,7 +66,7 @@ function buildEvaluationErrorResult(question: AuditQuestion) {
   };
 }
 
-export async function POST(request: Request) {
+async function handlePOST(request: Request) {
   try {
     const body = await request.json();
     const parsedBody = evaluateReviewRequestSchema.parse(body);
@@ -79,7 +81,7 @@ export async function POST(request: Request) {
     const uploadedChunks: VectorizedPolicyChunk[] = [];
 
     if (parsedBody.uploadedDatasetId) {
-      const dataset = getDataset(parsedBody.uploadedDatasetId);
+      const dataset = await getDataset(parsedBody.uploadedDatasetId, (await requestSession(request))!.sid);
       if (!dataset) {
         return NextResponse.json(
           {
@@ -141,11 +143,11 @@ export async function POST(request: Request) {
             question,
             chunks: combinedChunks,
           });
-        } catch (error) {
+        } catch {
           console.error("[evaluate] question failed", {
             questionId: question.id,
             message:
-              error instanceof Error ? error.message : "Unknown evaluation error",
+              "Request could not be completed.",
           });
 
           return buildEvaluationErrorResult(question);
@@ -155,9 +157,9 @@ export async function POST(request: Request) {
 
     const response: EvaluateResponse = { results };
     return NextResponse.json(response);
-  } catch (error) {
+  } catch {
     const message =
-      error instanceof Error ? error.message : "Failed to evaluate compliance questions.";
+      "Request could not be completed.";
 
     console.error("[evaluate] failed", {
       message,
@@ -166,3 +168,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export const POST = guardApi(handlePOST, true);

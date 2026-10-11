@@ -93,7 +93,8 @@ function formatBytes(bytes: number) {
 }
 
 function escapeCsvValue(value: string | number) {
-  const text = String(value ?? "");
+  const raw = String(value ?? "");
+  const text = /^[\s]*[=+@\-\t\r]/.test(raw) ? "\'" + raw : raw;
   return `"${text.replace(/"/g, '""')}"`;
 }
 

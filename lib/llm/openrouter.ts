@@ -1,3 +1,4 @@
+import { providerFetch } from "../security/provider";
 import { z } from "zod";
 
 const openRouterEnvelopeSchema = z.object({
@@ -131,7 +132,7 @@ async function requestOpenRouterChat({
   let response: Response;
 
   try {
-    response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    response = await providerFetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -166,9 +167,9 @@ async function requestOpenRouterChat({
   }
 
   if (!response.ok) {
-    const errorText = await response.text();
+
     throw new Error(
-      `OpenRouter request failed for ${responseLabel}: ${response.status} ${errorText}`,
+      `OpenRouter request failed for ${responseLabel}: ${response.status}`,
     );
   }
 
@@ -285,7 +286,7 @@ export async function callOpenRouterEmbeddings({
     return [];
   }
 
-  const response = await fetch("https://openrouter.ai/api/v1/embeddings", {
+  const response = await providerFetch("https://openrouter.ai/api/v1/embeddings", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -298,9 +299,9 @@ export async function callOpenRouterEmbeddings({
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
+
     throw new Error(
-      `OpenRouter embedding request failed for ${responseLabel}: ${response.status} ${errorText}`,
+      `OpenRouter embedding request failed for ${responseLabel}: ${response.status}`,
     );
   }
 
