@@ -35,3 +35,5 @@ jobs:
       - name: Build production assets
         working-directory: .
         run: npm run build
+      - name: Real HTTP login and isolated PDF upload
+        run: npm run test:http

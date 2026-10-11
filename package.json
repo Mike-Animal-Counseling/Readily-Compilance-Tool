@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "ingest:policies": "tsx scripts/ingest-preloaded-policies.ts",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "tsx --test tests/*.test.ts",
+    "test:http": "node scripts/http-security-smoke.mjs"
   },
   "dependencies": {
     "dotenv": "^17.3.1",

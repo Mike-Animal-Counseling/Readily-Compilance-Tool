@@ -1,4 +1,5 @@
 import { Worker } from "node:worker_threads";
+import path from "node:path";
 import type {
   Output as ParsedPdfOutput,
   Page as ParsedPdfPage,
@@ -88,7 +89,11 @@ async function parsePdfBuffer(data: Uint8Array): Promise<ParsedPdfOutput> {
   if (activeWorkers >= 2) throw new Error("PDF processor busy");
   activeWorkers++;
   try { return await new Promise<ParsedPdfOutput>((resolve, reject) => {
-    const worker = new Worker(new URL('./pdf-worker.mjs', import.meta.url), { workerData: data, resourceLimits: { maxOldGenerationSizeMb: 128 } });
+    // Keep the worker external to Next's server bundle. The source file is
+    // included by outputFileTracingIncludes for deployed/standalone builds.
+    // Primitive transport also survives framework worker instrumentation that
+    // serializes typed arrays as objects with numeric keys.
+    const worker = new Worker(path.resolve(process.cwd(), 'lib/pdf/pdf-worker.mjs'), { workerData: { pdfBase64: Buffer.from(data).toString('base64') }, resourceLimits: { maxOldGenerationSizeMb: 128 } });
     const timer = setTimeout(() => { void worker.terminate(); reject(new Error('PDF parsing timed out')); }, 10000);
     const finish = () => { clearTimeout(timer); void worker.terminate(); };
     worker.once('message', (result) => { finish(); if (result.error) reject(new Error('Invalid PDF')); else resolve(result.data); });
