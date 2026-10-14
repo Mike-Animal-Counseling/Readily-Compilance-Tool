@@ -32,6 +32,8 @@ jobs:
       - name: Lint
         working-directory: .
         run: npm run lint
+      - name: Check types with TypeScript 7
+        run: npm run typecheck
       - name: Build production assets
         working-directory: .
         run: npm run build
