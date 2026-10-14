@@ -12,7 +12,7 @@
     "test:http": "node scripts/http-security-smoke.mjs"
   },
   "dependencies": {
-    "dotenv": "^17.3.1",
+    "dotenv": "^18.0.7",
     "next": "16.4.0",
     "pdf2json": "^4.0.2",
     "postgres": "^3.4.7",
