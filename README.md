@@ -1,208 +1,126 @@
-# Readily Compliance Review MVP
+# Readily — Compliance Review Workspace
 
-A production-style MVP for healthcare compliance review. The app lets an analyst upload an audit PDF, extract review questions, upload policy PDFs, retrieve relevant policy evidence, generate grounded Yes/No audit answers, and export review-ready results.
+Turn an audit PDF and policy documents into evidence-linked answers for analyst review. Readily extracts questions, retrieves policy passages, generates preliminary Yes/No answers, and exports a review-ready CSV with citations and review state.
 
-The system is framed as a secure compliance assistant built around data minimization. For this MVP, sensitive policy text is kept server-side after parsing, only top retrieved chunks are sent to the LLM, and the frontend receives only document metadata plus result snippets needed for review.
+[Workflow](#review-workflow) · [Run Locally](#run-locally) · [Configuration](#configuration) · [API](#api-reference) · [Deployment](#deployment)
 
-The app now supports a persistent pre-ingested default policy library plus optional uploaded policies. This makes the workflow closer to a real organization policy knowledge base while preserving the existing upload flow.
+## Review Workflow
 
-## Deployment
+| Step | Analyst action | Result |
+| --- | --- | --- |
+| 1. Extract | Upload an audit PDF | A question set that can be reviewed and edited |
+| 2. Select evidence | Upload policy PDFs or use the pre-ingested library | Page-preserving policy passages available for retrieval |
+| 3. Review | Run evaluation and inspect each answer | Preliminary Yes/No, confidence, reason, source file, page, and supporting chunks |
+| 4. Resolve | Adjust review state or re-run an edited question | Analyst-reviewed findings |
+| 5. Export | Download CSV | Answers, citations, and review state for follow-up |
 
-The app is deployed on Vercel for private testing. The live deployment URL is intentionally not published because the current environment uses private LLM API credentials and billable model access.
+The model's answer is an input to analyst review. Text must be extractable from uploaded PDFs; OCR-only scans are not supported.
 
-## Quick Summary
+## Run Locally
 
-- Upload one audit PDF and extract review questions
-- Review and edit the extracted question set
-- Use a persistent default policy library plus optional uploaded policies
-- Run grounded `Yes` / `No` evaluation against retrieved evidence
-- Export a review-ready CSV with citations and analyst review state
-
-## Stack
-
-- Next.js 16.4.0 with App Router
-- TypeScript
-- Tailwind CSS 4
-- OpenRouter for LLM calls
-- `pdf2json` for server-side page-preserving PDF text extraction
-- `zod` for request and model-output validation
-
-## What It Does
-
-1. Upload one audit PDF
-2. Extract audit/compliance questions with the LLM
-3. Review and edit extracted questions
-4. Upload one or more policy PDFs
-5. Parse policy PDFs page by page with file and page metadata
-6. Ingest default policy PDFs from the `policies/` folder into Postgres
-7. Query the persistent default library from Postgres at request time
-8. Support hybrid retrieval from the default library plus uploaded PDFs
-9. Return a preliminary audit answer of `Yes` or `No`
-10. Show confidence, reason, primary evidence, source file, source page, source type, and retrieved supporting chunks
-11. Support analyst review states and CSV export
-
-## Environment Variables
-
-Create a `.env.local` file:
+Use **Node.js 24+** and the committed lockfile.
 
 ```bash
-DEMO_ACCESS_CODE=READILY2026
-OPENROUTER_API_KEY=your_openrouter_api_key
-OPENROUTER_MODEL=openai/gpt-4.1-mini
-OPENROUTER_EXTRACT_MODEL=openai/gpt-4.1-mini
-OPENROUTER_REVIEW_MODEL=openai/gpt-4o
-OPENROUTER_EMBEDDING_MODEL=openai/text-embedding-3-small
-OPENROUTER_EMBEDDING_DIMENSIONS=1536
-AUDIT_EXTRACTION_BATCH_SIZE=3
-AUDIT_EXTRACTION_MAX_TOKENS=1200
-AUDIT_EXTRACTION_TIMEOUT_MS=10000
-EVALUATION_CONCURRENCY=3
-EVALUATION_LLM_TIMEOUT_MS=20000
-RETRIEVAL_VECTOR_WEIGHT=3
-PRELOADED_LEXICAL_WEIGHT=1
-PRELOADED_VECTOR_WEIGHT=0.35
-DATABASE_URL=your_postgres_connection_string
+git clone https://github.com/Mike-Animal-Counseling/Readily-Compilance-Tool.git
+cd Readily-Compilance-Tool
+npm ci --ignore-scripts
+cp .env.example .env.local
 ```
 
-The repo includes `.env.example` with the same keys.
+PowerShell users can use `Copy-Item .env.example .env.local` for the final step.
 
-- `OPENROUTER_MODEL` is the fallback default model.
-- `DEMO_ACCESS_CODE` enables a lightweight hosted-demo access gate when set.
-- `OPENROUTER_EXTRACT_MODEL` optionally overrides the audit-question extraction model.
-- `OPENROUTER_REVIEW_MODEL` optionally overrides the review/evaluation model.
-- `OPENROUTER_EMBEDDING_MODEL` is used for preloaded-policy embeddings in Postgres.
-- `AUDIT_EXTRACTION_*` controls audit extraction batching, token budget, and timeout.
-- `EVALUATION_*` controls review concurrency and LLM timeout.
-- `RETRIEVAL_VECTOR_WEIGHT` and `PRELOADED_*_WEIGHT` control lexical/vector blending.
-
-## Install
+Generate two different random secrets by running this command twice:
 
 ```bash
-npm install
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-## Run
+Set one result as `DEMO_ACCESS_CODE` and the other as `SESSION_SECRET` in `.env.local`. Keep `APP_ORIGIN=http://localhost:3000` locally and provide `OPENROUTER_API_KEY` for model-backed extraction and review. Use synthetic documents when trying the workflow.
 
 ```bash
 npm run dev
 ```
 
-Open `http://localhost:3000`.
+Open **http://localhost:3000** and enter your generated access code. The old `READILY2026` sample code is rejected by the current application.
+
+## Configuration
+
+The maintained configuration template is [`.env.example`](.env.example). Copy it rather than relying on an older configuration block.
+
+| Setting | Purpose |
+| --- | --- |
+| `DEMO_ACCESS_CODE` | Invite code; independently generated and at least 32 characters |
+| `SESSION_SECRET` | Different random secret used to sign access sessions |
+| `APP_ORIGIN` | Exact application origin; HTTPS required in production |
+| `REDIS_URL` | Authenticated TLS Redis (`rediss://`) required in production |
+| `OPENROUTER_API_KEY` | Provider credential for model-backed operations |
+| `OPENROUTER_MODEL` | Fallback model; extraction and review have optional overrides |
+| `DATABASE_URL` | PostgreSQL connection for the optional persistent policy library |
+| `AUDIT_EXTRACTION_*` | Extraction batch size, token budget, and timeout |
+| `EVALUATION_*` | Review concurrency and provider timeout |
+| `RETRIEVAL_VECTOR_WEIGHT`, `PRELOADED_*_WEIGHT` | Retrieval blending settings |
+
+Additional embedding-model settings are listed in the template. Never commit `.env.local`, real policy documents, or provider credentials.
 
 ## Default Policy Library
 
-Put organization policy PDFs in the `policies/` folder.
-
-- Run the offline ingest command:
+Uploaded policies can be used for a review session. For a persistent library, configure `DATABASE_URL`, place the intended policy PDFs in `policies/`, then run:
 
 ```bash
 npm run ingest:policies
 ```
 
-- This incrementally syncs PDFs from `policies/` into Postgres.
-- Unchanged PDFs are skipped.
-- New or modified PDFs are re-parsed and re-written.
-- PDFs removed from `policies/` are deleted from the default policy library.
-- Online requests no longer parse the default library on the fly.
-- The UI exposes a `Use default policy library` toggle, enabled by default when policy PDFs are present.
+The offline ingest command syncs the directory into PostgreSQL: unchanged PDFs are skipped, changed PDFs are re-parsed, and removed PDFs are deleted from the library. Online requests query the ingested library instead of parsing that directory again. The interface can combine library results with selected uploaded policies.
 
-## Database Setup
+## API Reference
 
-Set `DATABASE_URL` in `.env.local`.
+| Route | Purpose |
+| --- | --- |
+| `POST /api/extract-audit` | Start batched question extraction and return a job ID |
+| `GET /api/extract-audit?jobId=...` | Read extraction progress and results |
+| `POST /api/parse-policies` | Parse uploaded PDFs into page-preserving policy chunks |
+| `GET /api/policy-library` | Read persistent-library metadata |
+| `POST /api/evaluate` | Evaluate reviewed questions against selected evidence |
+| `POST /api/evaluate-one` | Re-run a single edited question |
 
-For Vercel deployment, the simplest path is:
+## Data and Access
 
-1. Create a Postgres database through the Vercel Marketplace, typically Neon-backed
-2. Copy the connection string into `DATABASE_URL`
-3. Run `npm run ingest:policies` locally or in a trusted CI environment
-4. Deploy the app to Vercel
+- Access uses an invite code and signed, expiring HttpOnly sessions. It is not an organization identity or SSO system.
+- Jobs and uploaded datasets are isolated by session; production uses shared Redis storage with bounded lifetimes and budgets.
+- Policy parsing and retrieval run server-side. The interface receives metadata, review results, and evidence snippets needed for review.
+- Retrieved policy excerpts are sent to OpenRouter for model-backed review. Configure the provider's privacy, retention, and spending controls for the deployment.
+- A controlled demo should use synthetic documents. Organization use requires appropriate identity, authorization, and audit controls before sensitive documents are accepted.
+
+See [production requirements](docs/PRODUCTION_SECURITY.md) for upload limits, storage lifetimes, session behavior, and deployment controls.
+
+## Architecture
+
+| Layer | Implementation |
+| --- | --- |
+| Interface and API | Next.js App Router, React, TypeScript, Tailwind CSS |
+| PDF parsing | `pdf2json` with page metadata |
+| Model calls and validation | OpenRouter and Zod |
+| Persistent library | PostgreSQL and offline ingestion |
+| Production jobs and datasets | Shared Redis storage |
+
+Useful implementation entry points:
+
+- [Persistent policy store](lib/db/preloaded-policy-store.ts)
+- [Retrieval](lib/rag/retrieval.ts) and [evaluation](lib/rag/evaluation.ts)
+- [Session verification](lib/auth/session.ts)
+- [Offline ingestion](scripts/ingest-preloaded-policies.ts)
 
 ## Verify
 
 ```bash
+npm test
 npm run lint
 npm run build
+npm audit
 ```
 
-## Demo Flow
+## Deployment
 
-1. Upload an audit PDF in Step 1.
-2. Click `Extract questions`.
-3. Review, edit, add, or remove questions in Step 2.
-4. Upload one or more policy PDFs in Step 3.
-5. Click `Parse policies`.
-6. Choose which parsed policies to include.
-7. Click `Run review`.
-8. Review `Yes`/`No` answers, confidence, reason, evidence, and citations.
-9. Adjust review state or re-run a single question after editing it.
-10. Export the result set with `Export CSV`.
+Hosted testing is operator-managed. A page response alone does not verify PDF processing or model-backed review. The configured Vercel address returned HTTP 500 during the 2026-10-31 documentation check; hosted availability needs a separate deployment investigation.
 
-## API Routes
-
-- `POST /api/extract-audit`
-  - Accepts one audit PDF
-  - Creates an extract job and returns a `jobId`
-  - Processes batched audit extraction in the background
-  - Falls back to local heuristic extraction when needed
-
-- `GET /api/extract-audit?jobId=...`
-  - Returns extract job status, batch progress, and the final payload when complete
-
-- `POST /api/parse-policies`
-  - Accepts one or more policy PDFs
-  - Parses page text with page-number preservation
-  - Stores parsed documents and chunks server-side in memory
-  - Returns a dataset ID plus document metadata only
-
-- `GET /api/policy-library`
-  - Returns metadata for the Postgres-backed default policy library
-
-- `POST /api/evaluate`
-  - Accepts reviewed questions plus default-library toggle and optional uploaded dataset ID
-  - Retrieves relevant chunks from both the persistent default library and uploaded policies
-  - Calls OpenRouter and returns structured `Yes`/`No` results
-
-- `POST /api/evaluate-one`
-  - Re-runs one question only
-
-## Sensitive Data Handling
-
-- Raw policy pages and chunk text are not returned to the frontend.
-- The browser stores only the policy dataset ID, document metadata, reviewed questions, and evaluation results.
-- The evaluator retrieves only the selected uploaded documents and top matching chunks on the server.
-- The LLM receives only the top retrieved chunks for a question, never full documents.
-- The results UI displays primary evidence plus an optional expandable list of retrieved chunks used for evaluation.
-- The default policy library is persisted in Postgres and ingested offline.
-- Uploaded policy datasets remain temporary and session-scoped.
-- There is no auth in this MVP, but the design leaves room for future user-based access controls and organization dataset separation.
-
-## Notes
-
-- This MVP uses Postgres for the persistent default policy library plus an in-memory uploaded dataset store.
-- Retrieval is hybrid by source: persistent default-library candidates plus uploaded-session candidates.
-- The app does not support OCR-only scanned PDFs. Text must be extractable from the PDF.
-- LLM output is validated with `zod`, and citations are constrained to retrieved chunks.
-- Audit extraction and review both show real progress in the UI.
-- Review results expose the primary evidence plus the retrieved chunk set that was sent to the model.
-- The app is positioned as scalable toward HIPAA-compliant production architecture, but it intentionally avoids enterprise-grade security overengineering in this MVP.
-
-## New Modules
-
-- `lib/db/preloaded-policy-store.ts`
-  - Stores and queries the persistent default policy library in Postgres
-
-- `lib/rag/embeddings.ts`
-  - Creates lightweight deterministic local embeddings for MVP retrieval
-
-- `lib/rag/vector-store.ts`
-  - Vectorizes chunks and provides cosine similarity helpers
-
-- `app/api/policy-library/route.ts`
-  - Returns default library metadata to the UI
-
-- `scripts/ingest-preloaded-policies.ts`
-  - Offline ingestion command for loading `policies/` into Postgres
-
-## Security and deployment
-
-Read the [security policy](SECURITY.md) and [production requirements](docs/PRODUCTION_SECURITY.md) before deployment.
+Production startup requires the configured HTTPS origin, independent access/session secrets, and authenticated TLS Redis. Configure PostgreSQL for a persistent policy library and provider access for model-backed operations. Follow the [production requirements](docs/PRODUCTION_SECURITY.md) before deployment and the [security policy](SECURITY.md) for private vulnerability reporting.
