@@ -21,7 +21,7 @@ The model's answer is an input to analyst review. Text must be extractable from 
 Use **Node.js 24+** and the committed lockfile.
 
 ```bash
-git clone https://github.com/Mike-Animal-Counseling/Readily-Compilance-Tool.git
+git clone https://github.com/Mike-Animal-Counseling/readily-compliance-tool.git
 cd Readily-Compilance-Tool
 npm ci --ignore-scripts
 cp .env.example .env.local
