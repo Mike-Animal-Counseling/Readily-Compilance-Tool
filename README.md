@@ -88,15 +88,17 @@ Online requests query the ingested library and can combine it with uploaded poli
 
 - Access is an invite code plus signed, expiring HttpOnly sessions; it is not SSO.
 - Jobs and datasets are isolated by session; production uses bounded shared Redis storage.
-- Retrieved excerpts are sent to OpenRouter for model-backed review. Configure the
-  provider's privacy, retention, and spending controls.
+- Audit PDF text, policy and question text, and retrieved excerpts are sent to OpenRouter
+  for extraction, embeddings, and review. Configure the provider's privacy, retention,
+  and spending controls.
 - A controlled demo should use synthetic documents. Organization use needs appropriate
   identity, authorization, and audit controls first.
 
 ## Stack
 
-Next.js App Router, React, TypeScript, and Tailwind CSS · `pdf2json` for page metadata ·
-OpenRouter with Zod validation · PostgreSQL for the policy library · Redis for production jobs.
+Next.js App Router, React, TypeScript, and Tailwind CSS · `pdf2json` for per-page text
+extraction · OpenRouter with Zod validation · PostgreSQL for the policy library · Redis for
+production jobs.
 
 ## Verify
 
